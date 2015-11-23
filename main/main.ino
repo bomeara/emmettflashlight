@@ -7,6 +7,10 @@
   flashlight for Naomi's brother, Emmett (age 6). We are using a
   Trinket Pro 5V from Adafruit for this.
 
+  This also incorporates code from bildr, 
+  http://bildr.org/2012/08/rotary-encoder-arduino/, to deal with
+  rotary encoder.
+
   This is free software: you can redistribute it and/or modify
   it under the terms of the GNU Lesser General Public License as
   published by the Free Software Foundation, either version 3 of
@@ -77,8 +81,27 @@ int redUp = 0;
 int greenUp = 0;
 int blueUp = 0;
 
+// Initial mode
+int lightMode = 0;
+int maxMode = 9;
 
-// Digital input pin definitions
+
+
+
+//This block from bildr article: http://bildr.org/2012/08/rotary-encoder-arduino/
+int encoderPin1 = 5; 
+int encoderPin2 = 3; 
+int encoderSwitchPin = 4; //push button switch
+volatile int lastEncoded = 0;
+volatile long encoderValue = 0;
+long lastencoderValue = 0;
+int lastMSB = 0;
+int lastLSB = 0;
+
+
+
+// Digital input pin definitions; not needed with rotary encoder.
+/*
 #define WHITE_PIN   2
 #define HLS_PIN     3
 #define HLS_ROT_PIN 4
@@ -89,11 +112,12 @@ int blueUp = 0;
 #define MODE_G_PIN  9
 #define MODE_H_PIN  8
 #define MODE_I_PIN  11
+*/
 
 // When we setup the NeoPixel library, we tell it how many pixels, and which pin to use to send signals.
 // Note that for older NeoPixel strips you might need to change the third parameter--see the strandtest
 // example for more information on possible values.
-#define NUMPIXELS   12
+#define NUMPIXELS   16
 #define NEOPIX_PIN  12
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, NEOPIX_PIN, NEO_GRB + NEO_KHZ800);
 
@@ -106,8 +130,21 @@ void setup()
   pixels.begin(); // This initializes the NeoPixel library.
   pinMode(NEOPIX_PIN, OUTPUT);
 
+//This block from bildr article: http://bildr.org/2012/08/rotary-encoder-arduino/
+  pinMode(encoderPin1, INPUT); 
+  pinMode(encoderPin2, INPUT);
+  pinMode(encoderSwitchPin, INPUT);
+  digitalWrite(encoderPin1, HIGH); //turn pullup resistor on
+  digitalWrite(encoderPin2, HIGH); //turn pullup resistor on
+  digitalWrite(encoderSwitchPin, HIGH); //turn pullup resistor on
+  //call updateEncoder() when any high/low changed seen
+  //on interrupt 0 (pin 2), or interrupt 1 (pin 3) 
+  attachInterrupt(0, updateEncoder, CHANGE); 
+  attachInterrupt(1, updateEncoder, CHANGE);
+
   // The switch pins
-  pinMode(WHITE_PIN,   INPUT_PULLUP);
+  // We're using a rotary encoder, not a 10 pos switch
+ /* pinMode(WHITE_PIN,   INPUT_PULLUP);
   pinMode(HLS_PIN,     INPUT_PULLUP);
   pinMode(HLS_ROT_PIN, INPUT_PULLUP);
   pinMode(RANDOM_PIN,  INPUT_PULLUP);
@@ -117,14 +154,15 @@ void setup()
   pinMode(MODE_G_PIN,  INPUT_PULLUP);
   pinMode(MODE_H_PIN,  INPUT_PULLUP);
   pinMode(MODE_I_PIN,  INPUT_PULLUP);
+  */
 
-  // Set up the HLS pots as an INPUT:
-  pinMode(A1, INPUT); //H
-  pinMode(A2, INPUT); //S
-  pinMode(A3, INPUT); //V
+ // Set up the HLS pots as an INPUT:
+ pinMode(A1, INPUT); //H
+ pinMode(A2, INPUT); //S
+ pinMode(A3, INPUT); //V
 
-  // The on-baord LED
-  pinMode(13, OUTPUT);
+ // The on-board LED
+pinMode(13, OUTPUT);
 
   // Comment out the following pin 13 write/delays to have start-up go faster.
   digitalWrite(13, HIGH);
@@ -162,8 +200,13 @@ void loop()
    float sat  =  pot2/1024.0;
    float val  =  pot3/1024.0;
 
+  if(digitalRead(encoderSwitchPin)){ //Button on encoder is being pushed
+    //Not sure what we should do with this yet.
+  }
+
    // White only
-   if (false == digitalRead(WHITE_PIN))
+ //  if (false == digitalRead(WHITE_PIN))
+   if (lightMode == 0)
    {
       hsvToRgb(0.99, 0.0, val);
       for (int i=0; i < NUMPIXELS; i++) 
@@ -173,7 +216,8 @@ void loop()
       pixels.show();   // This sends the updated pixel color to the hardware.
    }
    // Manual HLS
-   else  if (false == digitalRead(HLS_PIN))
+ //  else  if (false == digitalRead(HLS_PIN))
+   else  if (lightMode == 1)
    {
       hsvToRgb(pot1/1024.0, sat, val);
       for (int i=0; i < NUMPIXELS; i++) 
@@ -183,7 +227,8 @@ void loop()
       pixels.show();   // This sends the updated pixel color to the hardware.
    }
    // Rotate HLS
-   else  if (false == digitalRead(HLS_ROT_PIN))
+//   else  if (false == digitalRead(HLS_ROT_PIN))
+   else  if (lightMode == 2)
    {
       rothue = rothue + 0.01;
       if (1.0 < rothue) rothue = 0.01;
@@ -195,38 +240,44 @@ void loop()
       pixels.show();   // This sends the updated pixel color to the hardware.
       delay(pot1/10); // Delay for a period of time (in milliseconds).
    }
-   else  if (false == digitalRead(RANDOM_PIN))
+//   else  if (false == digitalRead(RANDOM_PIN))
+   else  if (lightMode == 3)
    {
       multiRotate(pot1, sat, val);
    }
-   else  if (false == digitalRead(MROT_PIN))
+//   else  if (false == digitalRead(MROT_PIN))
+   else  if (lightMode == 4)
    {
       triRotate(pot1, sat, val);
    }
-   else  if (false == digitalRead(CYLON_PIN))
-   {
+//   else  if (false == digitalRead(CYLON_PIN))
+   else  if (lightMode == 5)
+  {
       cylon(pot1, sat, val);
    }
-   else  if (false == digitalRead(STROBE_PIN))
+//   else  if (false == digitalRead(STROBE_PIN))
+   else  if (lightMode == 6)
    {
       strobe(pot1, sat, pot3);
    }
-   else  if (false == digitalRead(MODE_G_PIN))
+//   else  if (false == digitalRead(MODE_G_PIN))
+   else  if (lightMode == 7)
    {
       mode_g(pot1, sat, pot3);
    }
-   else  if (false == digitalRead(MODE_H_PIN))
+//   else  if (false == digitalRead(MODE_H_PIN))
+   else  if (lightMode == 8)
    {
       mode_h(pot1, sat, pot3);
    }
-   else  if (false == digitalRead(MODE_I_PIN))
+//   else  if (false == digitalRead(MODE_I_PIN))
+   else  if (lightMode == 9)
    {
       mode_i(pot1, sat, pot3);
    }
    else 
    {
-      // Should not happen
-      strobe(pot1, sat, pot3);
+    lightMode = 0; //reset 
    }
 }
 
@@ -391,7 +442,7 @@ void triRotate(float pot1, float sat, float val)
       }
    }
 
-   // Incemente the color and reset if out of bounds (0.0 to 1.0)
+   // Increment the color and reset if out of bounds (0.0 to 1.0)
    color1 += 0.01;
    color2 += 0.01;
    color3 += 0.01;
@@ -617,3 +668,24 @@ void hsvToRgb(float hue, float saturation, float value)
    blue  = (int)(b*255.0);
 }
 
+
+//From bildr article: http://bildr.org/2012/08/rotary-encoder-arduino/
+void updateEncoder(){
+  int MSB = digitalRead(encoderPin1); //MSB = most significant bit
+  int LSB = digitalRead(encoderPin2); //LSB = least significant bit
+
+  int encoded = (MSB << 1) |LSB; //converting the 2 pin value to single number
+  int sum  = (lastEncoded << 2) | encoded; //adding it to the previous encoded value
+
+  if(sum == 0b1101 || sum == 0b0100 || sum == 0b0010 || sum == 0b1011) encoderValue ++;
+  if(sum == 0b1110 || sum == 0b0111 || sum == 0b0001 || sum == 0b1000) encoderValue --;
+  if(sum == 0b1101 || sum == 0b0100 || sum == 0b0010 || sum == 0b1011) lightMode ++;
+  if(sum == 0b1110 || sum == 0b0111 || sum == 0b0001 || sum == 0b1000) lightMode --;
+  if(lightMode < 0) {
+    lightMode = 0;
+  }
+  if(lightMode > maxMode) {
+    lightMode = 0;
+  }
+  lastEncoded = encoded; //store this value for next time
+}
