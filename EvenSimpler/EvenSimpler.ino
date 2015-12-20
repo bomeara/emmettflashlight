@@ -94,6 +94,8 @@ Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, NEOPIX_PIN, NEO_GRB + NE
 //int buttonLEDGreen = 10;
 //int buttonLEDBlue = 11;
 
+float randomMode = 1;
+
 #define pushButton  8
 
 
@@ -103,9 +105,10 @@ Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, NEOPIX_PIN, NEO_GRB + NE
 */
 void setup()
 {
+  randomSeed(analogRead(0));
   pixels.begin(); // This initializes the NeoPixel library.
   pinMode(NEOPIX_PIN, OUTPUT);
-
+  randomMode = random(1, 200);
   //  pinMode(buttonLEDRed, OUTPUT);
   //  pinMode(buttonLEDGreen, OUTPUT);
   //  pinMode(buttonLEDBlue, OUTPUT);
@@ -151,7 +154,7 @@ void loop()
 {
 
 
- 
+
   int knob1 = analogRead(A4);
 
   int pot1 = 500;
@@ -165,46 +168,7 @@ void loop()
   float val  =  pot3 / 1024.0;
   val = 0.1;
 
-
-  lightMode = 6;
- /* if(knob1 < 100) {
-    lightMode = 1;
-  }
-  else if(knob1 < 200) {
-    lightMode = 2;
-  }
-  else if(knob1 < 300) {
-    lightMode = 3;
-  }
-  else if(knob1 < 400) {
-    lightMode = 4;
-  }
-  else if(knob1 < 500) {
-    lightMode = 5;
-  }
-  else {
-    lightMode = 6;
-  }
-  */
-
-
-
- if (lightMode == 6) { // turn on, white, val power
-    hsvToRgb(0.99, 1, val);
-    for (int i = 0; i < NUMPIXELS; i++)
-    {
-      pixels.setPixelColor(i, pixels.Color(red, green, blue));
-    }
-    pixels.show();   // This sends the updated pixel color to the hardware.
-  } 
-  else if (lightMode == 2) { // turn on, red, val power
-    for (int i = 0; i < NUMPIXELS; i++)
-    {
-  //    pixels.setPixelColor(i, pixels.Color(200, 0, 0));
-    }
-  //  pixels.show();   // This sends the updated pixel color to the hardware.
-  } 
-  else  if (lightMode == 3) {
+  if (randomMode < 50.0) {
     rothue = rothue + 0.01;
     if (1.0 < rothue) rothue = 0.01;
     hsvToRgb(rothue, sat, val);
@@ -214,30 +178,26 @@ void loop()
     }
     pixels.show();   // This sends the updated pixel color to the hardware.
     delay(pot1 / 10); // Delay for a period of time (in milliseconds).
+  } else if (randomMode < 100) {
+    hsvToRgb(1023 / 1024.0, sat, val);
+    for (int i = 0; i < NUMPIXELS; i++)
+    {
+      pixels.setPixelColor(i, pixels.Color(red, green, blue));
+    }
+    pixels.show();   // This sends the updated pixel color to the hardware.
   }
-  else  if (lightMode == 4)
-  {
-    multiRotate(pot1, sat, val);
+  else if(randomMode < 150) {
+         multiRotate(pot1, sat, val);
   }
-  //   else  if (false == digitalRead(MROT_PIN))
-  else  if (lightMode == 5)
-  {
-    triRotate(pot1, sat, val);
-  }
-  else if(lightMode == 1) 
-  { 
-     // hsvToRgb((knob1 - 500)/524.0, sat, val);
-      hsvToRgb((knob1)/1024.0, sat, val);
-
-      for (int i=0; i < NUMPIXELS; i++) 
-      {
-   pixels.setPixelColor(i, pixels.Color(red, green, blue)); 
-      }
-      pixels.show();   // This sends the updated pixel color to the hardware.
+  else {
+    hsvToRgb(0.99, 0.0, val);
+    for (int i = 0; i < NUMPIXELS; i++)
+    {
+      pixels.setPixelColor(i, pixels.Color(red, green, blue));
+    }
+    pixels.show();   // This sends the updated pixel color to the hardware.
   }
 }
-
-
 /*
    Function: cylon
    Purpose: Like Battlestar Gallactica exept in a circle
@@ -285,9 +245,9 @@ void multiRotate(float pot1, float sat, float val)
   static int onCounter          = 0;
   static boolean onMode         = true;
   static unsigned int pixelMask = 0;
-  static int colorRed[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-  static int colorGre[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-  static int colorBlu[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  static int colorRed[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  static int colorGre[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  static int colorBlu[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   static int nextPixelIndex = 0;
   static int newColor = 0;
 
@@ -314,7 +274,7 @@ void multiRotate(float pot1, float sat, float val)
   }
   else
   {
-    if (++nextPixelIndex > 11) nextPixelIndex = 0;
+    if (++nextPixelIndex > 15) nextPixelIndex = 0;
     newColor += 104;
     if (newColor > 1024) newColor = 1;
   }
