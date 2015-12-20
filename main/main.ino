@@ -64,6 +64,18 @@
 #define PIXEL_15 0x4000
 #define PIXEL_16 0x8000
 
+#define PIN_ENCODER_A 3
+#define PIN_ENCODER_B 5
+#define TRINKET_PINx  PINB
+
+#define encoderSwitchPin 1
+static uint8_t enc_prev_pos   = 0;
+static uint8_t enc_flags      = 0;
+static char    sw_was_pressed = 0;
+
+
+
+
 static unsigned int pixelSelect[] = {PIXEL_1,  PIXEL_2,  PIXEL_3,  PIXEL_4,  PIXEL_5, PIXEL_6,  
                                      PIXEL_7,  PIXEL_8,  PIXEL_9,  PIXEL_10, PIXEL_11, PIXEL_12, 
                                      PIXEL_13, PIXEL_14, PIXEL_15, PIXEL_16 };
@@ -89,16 +101,18 @@ int maxMode = 9;
 
 
 //This block from bildr article: http://bildr.org/2012/08/rotary-encoder-arduino/
-int encoderPin1 = 5; 
+/*int encoderPin1 = 5; 
 int encoderPin2 = 3; 
 int encoderSwitchPin = 4; //push button switch
+int buttonState = 0;  
 volatile int lastEncoded = 0;
 volatile long encoderValue = 0;
 long lastencoderValue = 0;
 int lastMSB = 0;
 int lastLSB = 0;
+*/
 
-
+int buttonState = 1;  
 
 // Digital input pin definitions; not needed with rotary encoder.
 /*
@@ -121,6 +135,10 @@ int lastLSB = 0;
 #define NEOPIX_PIN  12
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, NEOPIX_PIN, NEO_GRB + NEO_KHZ800);
 
+int buttonLEDRed = 9;
+int buttonLEDGreen = 10;
+int buttonLEDBlue = 11;
+
 /*
  * Function: loop
  * Purpose: Standard Arduino setup function
@@ -130,8 +148,25 @@ void setup()
   pixels.begin(); // This initializes the NeoPixel library.
   pinMode(NEOPIX_PIN, OUTPUT);
 
+  pinMode(PIN_ENCODER_A, INPUT);
+  pinMode(PIN_ENCODER_B, INPUT);
+  digitalWrite(PIN_ENCODER_A, HIGH);
+  digitalWrite(PIN_ENCODER_B, HIGH);
+
+  if (digitalRead(PIN_ENCODER_A) == LOW) {
+    enc_prev_pos |= (1 << 0);
+  }
+  if (digitalRead(PIN_ENCODER_B) == LOW) {
+    enc_prev_pos |= (1 << 1);
+  }
+
+  pinMode(encoderSwitchPin, INPUT);
+
+  digitalWrite(encoderSwitchPin, HIGH); //turn pullup resistor on
+
+
 //This block from bildr article: http://bildr.org/2012/08/rotary-encoder-arduino/
-  pinMode(encoderPin1, INPUT); 
+/*  pinMode(encoderPin1, INPUT); 
   pinMode(encoderPin2, INPUT);
   pinMode(encoderSwitchPin, INPUT);
   digitalWrite(encoderPin1, HIGH); //turn pullup resistor on
@@ -141,7 +176,7 @@ void setup()
   //on interrupt 0 (pin 2), or interrupt 1 (pin 3) 
   attachInterrupt(0, updateEncoder, CHANGE); 
   attachInterrupt(1, updateEncoder, CHANGE);
-
+*/
   // The switch pins
   // We're using a rotary encoder, not a 10 pos switch
  /* pinMode(WHITE_PIN,   INPUT_PULLUP);
@@ -157,18 +192,29 @@ void setup()
   */
 
  // Set up the HLS pots as an INPUT:
- pinMode(A1, INPUT); //H
- pinMode(A2, INPUT); //S
- pinMode(A3, INPUT); //V
+ //pinMode(A1, INPUT); //H
+ //pinMode(A2, INPUT); //S
+ //pinMode(A3, INPUT); //V
+
+  pinMode(buttonLEDRed, OUTPUT);
+  pinMode(buttonLEDGreen, OUTPUT);
+  pinMode(buttonLEDBlue, OUTPUT);
+
 
  // The on-board LED
 pinMode(13, OUTPUT);
 
   // Comment out the following pin 13 write/delays to have start-up go faster.
   digitalWrite(13, HIGH);
-  delay(200);
+  delay(2000);
   digitalWrite(13, LOW);
   delay(200);
+  digitalWrite(13, HIGH);
+  delay(2000);
+  digitalWrite(13, LOW);
+  //digitalWrite(buttonLEDRed, HIGH);
+
+  /*delay(200);
   digitalWrite(13, HIGH);
   delay(200);
   digitalWrite(13, LOW);
@@ -179,11 +225,7 @@ pinMode(13, OUTPUT);
   delay(200);
   digitalWrite(13, HIGH);
   delay(200);
-  digitalWrite(13, LOW);
-  delay(200);
-  digitalWrite(13, HIGH);
-  delay(200);
-  digitalWrite(13, LOW);
+  digitalWrite(13, LOW);*/
 }
 
 
@@ -193,15 +235,108 @@ pinMode(13, OUTPUT);
  */
 void loop() 
 {
+
+  if(buttonState > 0) {
+      digitalWrite(buttonLEDRed, HIGH);
+  }
+  else {
+      digitalWrite(buttonLEDRed, LOW);
+  }
+  int8_t enc_action = 0; // 1 or -1 if moved, sign is direction
+ 
+  // note: for better performance, the code will now use
+  // direct port access techniques
+  // http://www.arduino.cc/en/Reference/PortManipulation
+  uint8_t enc_cur_pos = 0;
+  // read in the encoder state first
+  if (bit_is_clear(TRINKET_PINx, PIN_ENCODER_A)) {
+    enc_cur_pos |= (1 << 0);
+  }
+  if (bit_is_clear(TRINKET_PINx, PIN_ENCODER_B)) {
+    enc_cur_pos |= (1 << 1);
+  }
+ 
+  // if any rotation at all
+  if (enc_cur_pos != enc_prev_pos)
+  {
+    if (enc_prev_pos == 0x00)
+    {
+      // this is the first edge
+      if (enc_cur_pos == 0x01) {
+        enc_flags |= (1 << 0);
+      }
+      else if (enc_cur_pos == 0x02) {
+        enc_flags |= (1 << 1);
+      }
+    }
+ 
+    if (enc_cur_pos == 0x03)
+    {
+      // this is when the encoder is in the middle of a "step"
+      enc_flags |= (1 << 4);
+    }
+    else if (enc_cur_pos == 0x00)
+    {
+      // this is the final edge
+      if (enc_prev_pos == 0x02) {
+        enc_flags |= (1 << 2);
+      }
+      else if (enc_prev_pos == 0x01) {
+        enc_flags |= (1 << 3);
+      }
+ 
+      // check the first and last edge
+      // or maybe one edge is missing, if missing then require the middle state
+      // this will reject bounces and false movements
+      if (bit_is_set(enc_flags, 0) && (bit_is_set(enc_flags, 2) || bit_is_set(enc_flags, 4))) {
+        enc_action = 1;
+      }
+      else if (bit_is_set(enc_flags, 2) && (bit_is_set(enc_flags, 0) || bit_is_set(enc_flags, 4))) {
+        enc_action = 1;
+      }
+      else if (bit_is_set(enc_flags, 1) && (bit_is_set(enc_flags, 3) || bit_is_set(enc_flags, 4))) {
+        enc_action = -1;
+      }
+      else if (bit_is_set(enc_flags, 3) && (bit_is_set(enc_flags, 1) || bit_is_set(enc_flags, 4))) {
+        enc_action = -1;
+      }
+ 
+      enc_flags = 0; // reset for next time
+    }
+  }
+ 
+  enc_prev_pos = enc_cur_pos;
+ 
+  if (enc_action > 0) {
+   // lightMode=0;
+  }
+  else if (enc_action < 0) {
+    //lightMode=4;
+  }
+  else {
+  }
    // For a set of NeoPixels the first NeoPixel is 0, second is 1, all the way up to the count of pixels minus one.
    int pot1   =  analogRead(A1);
    int pot2   =  analogRead(A2);
    int pot3   =  analogRead(A3);
-   float sat  =  pot2/1024.0;
-   float val  =  pot3/1024.0;
 
-  if(digitalRead(encoderSwitchPin)){ //Button on encoder is being pushed
-    //Not sure what we should do with this yet.
+pot1 = 500;
+pot2 = 500;
+pot3 = 500;
+
+   //buttonState = digitalRead(encoderSwitchPin);
+  
+   float sat  =  pot2/1024.0;
+   sat = 1;
+   float val  =  pot3/1024.0;
+   val = 0.1;
+
+  if(digitalRead(encoderSwitchPin)==HIGH){ //Button on encoder is being pushed
+    buttonState = buttonState * -1;
+    //lightMode++;
+    //if(lightMode>9) {
+     // lightMode=0;
+    //}
   }
 
    // White only
@@ -670,7 +805,7 @@ void hsvToRgb(float hue, float saturation, float value)
 
 
 //From bildr article: http://bildr.org/2012/08/rotary-encoder-arduino/
-void updateEncoder(){
+/*void updateEncoder(){
   int MSB = digitalRead(encoderPin1); //MSB = most significant bit
   int LSB = digitalRead(encoderPin2); //LSB = least significant bit
 
@@ -679,12 +814,13 @@ void updateEncoder(){
 
   if(sum == 0b1101 || sum == 0b0100 || sum == 0b0010 || sum == 0b1011) encoderValue ++;
   if(sum == 0b1110 || sum == 0b0111 || sum == 0b0001 || sum == 0b1000) encoderValue --;
-  lightMode = encoderValue;
-  if(lightMode < 0) {
-    lightMode = 0;
-  }
-  if(lightMode > maxMode) {
-    lightMode = 0;
-  }
+ // lightMode = encoderValue;
+//  if(lightMode < 0) {
+    //lightMode = 0;
+  //}
+  //if(lightMode > maxMode) {
+   // lightMode = 0;
+ // }
+  
   lastEncoded = encoded; //store this value for next time
-}
+}*/
